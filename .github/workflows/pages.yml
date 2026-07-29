@@ -24,6 +24,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Optimize SEO for AI crawlers
+        run: python3 scripts/optimize-seo-for-ai.py
+
+      - name: Generate sitemap
+        run: python3 scripts/generate-sitemap.py
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Interne productiedocumentatie — niet bedoeld voor indexering
+Disallow: /nl/productie/
+
+Sitemap: https://storycatchers.be/sitemap.xml
