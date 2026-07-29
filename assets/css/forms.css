@@ -119,3 +119,11 @@
     margin: 0 !important;
     display: block !important;
 }
+
+.image-text .text-wrapper p:has(+ .sc-form__embed) {
+    margin-bottom: 0;
+}
+
+.image-text .text-wrapper .sc-form__embed {
+    margin-top: 0.75rem;
+}
