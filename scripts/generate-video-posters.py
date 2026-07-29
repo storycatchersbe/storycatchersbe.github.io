@@ -17,17 +17,18 @@ VIDEO_DIR = ROOT / "assets" / "video"
 ASSETS_DIR = VIDEO_DIR / "poster-assets"
 
 WIDTH, HEIGHT = 1280, 720
-TOP_BAR = 58
-BOTTOM_BAR = 59
-PHOTO_HEIGHT = HEIGHT - TOP_BAR - BOTTOM_BAR
+BORDER = 59
+PHOTO_W = WIDTH - 2 * BORDER
+PHOTO_H = HEIGHT - 2 * BORDER
 
+# Overlay positions: exact absolute canvas coords from the studiotour reference.
+BADGE_POS = (100, 100)
 TITLE_X = 113
 TITLE_BOTTOM = 567
 RED_BAR_BOX = (112, 600, 192, 614)
-BADGE_POS = (100, 100)
 
-FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
-TITLE_FONT_SIZE = 83
+FONT_BOLD = ASSETS_DIR / "Montserrat-Bold.ttf"
+TITLE_FONT_SIZE = 80
 TITLE_MAX_WIDTH = 1050
 
 POSTERS = [
@@ -92,6 +93,21 @@ POSTERS = [
         "poster": "2021-Storycatchers-SlechtvalkenBrussel-poster.jpg",
         "title": "Slechtvalken",
         "seek": "2",
+    },
+    {
+        "image": "vimeo-live-streaming-frame.jpg",
+        "poster": "2026-Storycatchers-LiveStreaming-poster.jpg",
+        "title": "Live streaming",
+    },
+    {
+        "image": "vimeo-webinars-frame.jpg",
+        "poster": "2026-Storycatchers-Webinars-poster.jpg",
+        "title": "Webinars",
+    },
+    {
+        "image": "vimeo-badge-printing-frame.jpg",
+        "poster": "2026-Storycatchers-BadgePrinting-poster.jpg",
+        "title": "Badge printing",
     },
 ]
 
@@ -233,13 +249,17 @@ def pick_clean_frame(
     return best_frame
 
 
+def title_font(size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(str(FONT_BOLD), size)
+
+
 def fit_title_font(title: str) -> ImageFont.FreeTypeFont:
     for size in range(TITLE_FONT_SIZE, 40, -1):
-        font = ImageFont.truetype(FONT_BOLD, size)
+        font = title_font(size)
         bbox = ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), title, font=font)
         if bbox[2] - bbox[0] <= TITLE_MAX_WIDTH:
             return font
-    return ImageFont.truetype(FONT_BOLD, 40)
+    return title_font(40)
 
 
 def render_poster(
@@ -247,14 +267,12 @@ def render_poster(
     title: str,
     badge: Image.Image,
     red_bar: Image.Image,
-    circles: Image.Image,
 ) -> Image.Image:
     canvas = Image.new("RGB", (WIDTH, HEIGHT), (255, 255, 255))
-    photo = cover_crop(frame.convert("RGB"), WIDTH, PHOTO_HEIGHT)
-    canvas.paste(photo, (0, TOP_BAR))
+    photo = cover_crop(frame.convert("RGB"), PHOTO_W, PHOTO_H)
+    canvas.paste(photo, (BORDER, BORDER))
 
     composed = canvas.convert("RGBA")
-    composed = Image.alpha_composite(composed, circles)
     composed.paste(badge, BADGE_POS, badge)
 
     draw = ImageDraw.Draw(composed)
@@ -268,60 +286,56 @@ def render_poster(
     return composed.convert("RGB")
 
 
-def build_circles_overlay() -> Image.Image:
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    cx, cy = 1340, -20
-    for radius, alpha in [(560, 36), (480, 40), (400, 44), (320, 48), (240, 52), (160, 56)]:
-        draw.ellipse(
-            (cx - radius, cy - radius, cx + radius, cy + radius),
-            outline=(255, 255, 255, alpha),
-            width=3,
-        )
-    return overlay
-
-
-def ensure_assets() -> tuple[Image.Image, Image.Image, Image.Image]:
+def ensure_assets() -> tuple[Image.Image, Image.Image]:
     reference = VIDEO_DIR / "2024-Storycatchers-Studiotour-poster.jpg"
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     badge_path = ASSETS_DIR / "storycatchers-badge.png"
     bar_path = ASSETS_DIR / "red-accent-bar.png"
-    circles_path = ASSETS_DIR / "o-circles-overlay.png"
+
+    if not FONT_BOLD.exists():
+        raise FileNotFoundError(
+            f"Missing {FONT_BOLD.name}. Download Montserrat-Bold.ttf into poster-assets/."
+        )
 
     if reference.exists():
         ref = Image.open(reference)
         ref.crop((100, 100, 425, 159)).save(badge_path)
-        ref.crop((112, 600, 192, 614)).save(bar_path)
-
-    build_circles_overlay().save(circles_path)
+        ref.crop(RED_BAR_BOX).save(bar_path)
 
     badge = Image.open(badge_path).convert("RGBA")
     red_bar = Image.open(bar_path).convert("RGBA")
-    circles = Image.open(circles_path).convert("RGBA")
-    return badge, red_bar, circles
+    return badge, red_bar
 
 
 def main() -> int:
     tmp = VIDEO_DIR / ".poster-frame.jpg"
-    badge, red_bar, circles = ensure_assets()
+    badge, red_bar = ensure_assets()
     created = []
 
     for item in POSTERS:
-        mp4 = VIDEO_DIR / item["mp4"]
         poster = VIDEO_DIR / item["poster"]
-        if not mp4.exists():
-            print(f"skip missing mp4: {mp4.name}", file=sys.stderr)
-            continue
+        if "image" in item:
+            source = VIDEO_DIR / item["image"]
+            if not source.exists():
+                print(f"skip missing image: {source.name}", file=sys.stderr)
+                continue
+            print(f"processing {poster.name} (image)...", file=sys.stderr)
+            frame = Image.open(source)
+        else:
+            mp4 = VIDEO_DIR / item["mp4"]
+            if not mp4.exists():
+                print(f"skip missing mp4: {mp4.name}", file=sys.stderr)
+                continue
+            print(f"processing {poster.name}...", file=sys.stderr)
+            frame = pick_clean_frame(
+                mp4,
+                item["seek"],
+                tmp,
+                auto_frame=item.get("auto_frame", True),
+            )
 
-        print(f"processing {poster.name}...", file=sys.stderr)
-        frame = pick_clean_frame(
-            mp4,
-            item["seek"],
-            tmp,
-            auto_frame=item.get("auto_frame", True),
-        )
-        result = render_poster(frame, item["title"], badge, red_bar, circles)
+        result = render_poster(frame, item["title"], badge, red_bar)
         result.save(poster, "JPEG", quality=92, optimize=True)
         created.append(poster.name)
         print(f"created {poster.name}")
