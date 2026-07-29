@@ -1,0 +1,15 @@
+---
+description: Open a GitHub pull request after pushing a feature branch
+alwaysApply: true
+---
+
+# Auto pull request after push
+
+When you push a feature branch to `origin` (especially branches prefixed with `cursor/`):
+
+1. After a successful push, open a pull request into `main` using `gh pr create`.
+2. If an open PR already exists for the branch, share its URL instead of creating a duplicate.
+3. Include a short summary and test plan in the PR body.
+4. Share the PR URL with the user and remind them that merging to `main` deploys storycatchers.be.
+
+Do not skip PR creation unless the user explicitly asks not to create one.
