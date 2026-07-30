@@ -21,6 +21,14 @@ HREFLANG_PATTERN = re.compile(
     r'<link\s+rel="alternate"\s+hreflang="([^"]+)"\s+href="([^"]+)"\s*/?>',
     re.IGNORECASE,
 )
+REDIRECT_PATTERN = re.compile(
+    r'<meta\s+http-equiv=["\']refresh["\']',
+    re.IGNORECASE,
+)
+CANONICAL_PATTERN = re.compile(
+    r'<link\s+rel=["\']canonical["\']\s+href=["\']([^"\']+)["\']',
+    re.IGNORECASE,
+)
 
 
 def page_url(html_path: Path) -> str | None:
@@ -54,6 +62,19 @@ def extract_lastmod(content: str) -> str | None:
         return dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
     except ValueError:
         return None
+
+
+def normalize_loc(url: str) -> str:
+    return url if url.endswith("/") else f"{url}/"
+
+
+def is_redirect_stub(content: str, loc: str) -> bool:
+    if REDIRECT_PATTERN.search(content):
+        return True
+    canonical_match = CANONICAL_PATTERN.search(content)
+    if not canonical_match:
+        return False
+    return normalize_loc(canonical_match.group(1)) != normalize_loc(loc)
 
 
 def extract_hreflang(content: str, page_url_value: str) -> list[tuple[str, str]]:
@@ -99,12 +120,18 @@ def main() -> None:
     seen: set[str] = set()
 
     for html_path in sorted(ROOT.rglob("index.html")):
+        rel = html_path.relative_to(ROOT).as_posix()
+        if rel == "index.html":
+            continue
+
         content = html_path.read_text(encoding="utf-8")
         if NOINDEX_PATTERN.search(content):
             continue
 
         loc = page_url(html_path)
         if not loc or loc in seen:
+            continue
+        if is_redirect_stub(content, loc):
             continue
         seen.add(loc)
 
