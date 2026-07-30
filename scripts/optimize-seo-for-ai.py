@@ -244,9 +244,7 @@ def apply_description(content: str, html_path: Path, descriptions: dict[str, str
     if not description:
         return content
 
-    if not extract_meta_content(content, name="description"):
-        content = set_meta_content(content, description, name="description")
-
+    content = set_meta_content(content, description, name="description")
     content = set_meta_content(content, description, prop="og:description")
     content = set_meta_content(content, description, name="twitter:description")
     return content
