@@ -1,0 +1,18 @@
+{
+  "nl/vacature/freelance-motion-designer/index.html": {
+    "title": "Freelance motion designer",
+    "employmentType": "CONTRACTOR",
+    "datePosted": "2025-07-25",
+    "validThrough": "2026-12-31",
+    "applicationContact": "ikwilwerken@storycatchers.be",
+    "identifier": "freelance-motion-designer"
+  },
+  "nl/vacature/live-technieker/index.html": {
+    "title": "Live technieker",
+    "employmentType": "FULL_TIME",
+    "datePosted": "2026-04-01",
+    "validThrough": "2026-12-31",
+    "applicationContact": "ikwilwerken@storycatchers.be",
+    "identifier": "live-technieker"
+  }
+}

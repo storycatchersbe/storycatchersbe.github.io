@@ -12,6 +12,7 @@ from urllib.parse import urljoin
 ROOT = Path(__file__).resolve().parents[1]
 SITE = "https://storycatchers.be"
 DESCRIPTIONS_PATH = Path(__file__).with_name("seo-descriptions.json")
+JOB_POSTINGS_PATH = Path(__file__).with_name("job-postings.json")
 
 LEGACY_META_BLOCK = re.compile(
     r"<!-- GENERAL META -->[\s\S]*?"
@@ -41,6 +42,19 @@ CONTACT_ORG_FIELDS = {
     "email": "hallo@storycatchers.be",
 }
 
+EN_WEBSITE_DESCRIPTION = (
+    "Digital studio productions and webinars for ambitious organizations."
+)
+CAREERS_URL = f"{SITE}/nl/werken-bij-storycatchers/"
+CAREERS_BREADCRUMB_NAME = "Werken bij Storycatchers"
+JOB_LOCATION = {
+    "@type": "Place",
+    "address": CONTACT_ORG_FIELDS["address"],
+}
+ORGANIZATION_LOGO = (
+    f"{SITE}/assets/images/uploads/2023/01/Storycatchers-Logo.png"
+)
+
 TITLE_SUFFIX = " | Storycatchers"
 
 TITLE_OVERRIDES: dict[str, str] = {
@@ -52,6 +66,12 @@ def load_descriptions() -> dict[str, str]:
     if not DESCRIPTIONS_PATH.exists():
         return {}
     return json.loads(DESCRIPTIONS_PATH.read_text(encoding="utf-8"))
+
+
+def load_job_postings() -> dict[str, dict[str, str]]:
+    if not JOB_POSTINGS_PATH.exists():
+        return {}
+    return json.loads(JOB_POSTINGS_PATH.read_text(encoding="utf-8"))
 
 
 def extract_meta_content(content: str, *, name: str | None = None, prop: str | None = None) -> str | None:
@@ -342,6 +362,134 @@ def fix_json_ld_urls(content: str) -> str:
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
+def is_english_page(html_path: Path, content: str) -> bool:
+    rel = html_path.relative_to(ROOT).as_posix()
+    if rel.startswith("en/"):
+        return True
+    return bool(re.search(r'<html[^>]*\slang=["\']en["\']', content, re.IGNORECASE))
+
+
+def replace_json_ld_refs(node: object, replacements: dict[str, str]) -> None:
+    if isinstance(node, dict):
+        for key, value in list(node.items()):
+            if isinstance(value, str) and value in replacements:
+                node[key] = replacements[value]
+            else:
+                replace_json_ld_refs(value, replacements)
+    elif isinstance(node, list):
+        for item in node:
+            replace_json_ld_refs(item, replacements)
+
+
+def fix_vacancy_breadcrumbs(graph: list[dict]) -> None:
+    for node in graph:
+        if node.get("@type") != "BreadcrumbList":
+            continue
+        for item in node.get("itemListElement", []):
+            if item.get("item") == f"{SITE}/nl/vacatures/":
+                item["item"] = CAREERS_URL
+                item["name"] = CAREERS_BREADCRUMB_NAME
+
+
+def localize_english_json_ld(graph: list[dict]) -> None:
+    replacements = {
+        f"{SITE}/nl/#website": f"{SITE}/en/#website",
+        f"{SITE}/nl/#organization": f"{SITE}/en/#organization",
+    }
+    replace_json_ld_refs(graph, replacements)
+
+    for node in graph:
+        node_type = node.get("@type")
+        if node_type == "WebSite":
+            node["@id"] = f"{SITE}/en/#website"
+            node["url"] = f"{SITE}/en/"
+            node["description"] = EN_WEBSITE_DESCRIPTION
+            node["inLanguage"] = "en-US"
+            if isinstance(node.get("publisher"), dict):
+                node["publisher"]["@id"] = f"{SITE}/en/#organization"
+        elif node_type == "Organization":
+            node["@id"] = f"{SITE}/en/#organization"
+            node["url"] = f"{SITE}/en/"
+
+
+def build_job_posting(page_url: str, job: dict[str, str], description: str | None) -> dict:
+    job_id = f"{page_url}#jobposting"
+    return {
+        "@type": "JobPosting",
+        "@id": job_id,
+        "title": job["title"],
+        "description": description or job["title"],
+        "datePosted": job["datePosted"],
+        "validThrough": job.get("validThrough"),
+        "employmentType": job["employmentType"],
+        "hiringOrganization": {
+            "@type": "Organization",
+            "name": "Storycatchers",
+            "sameAs": f"{SITE}/nl/",
+            "logo": ORGANIZATION_LOGO,
+        },
+        "jobLocation": JOB_LOCATION,
+        "applicantLocationRequirements": {
+            "@type": "Country",
+            "name": "BE",
+        },
+        "directApply": True,
+        "applicationContact": {
+            "@type": "ContactPoint",
+            "email": job["applicationContact"],
+            "contactType": "recruiting",
+        },
+        "identifier": {
+            "@type": "PropertyValue",
+            "name": "Storycatchers",
+            "value": job["identifier"],
+        },
+        "mainEntityOfPage": {"@id": page_url},
+    }
+
+
+def enhance_json_ld(
+    content: str,
+    html_path: Path,
+    job_postings: dict[str, dict[str, str]],
+) -> str:
+    match = re.search(
+        r'(<script type="application/ld\+json">)(.*?)(</script>)',
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+
+    try:
+        data = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return content
+
+    graph = data.get("@graph", [])
+    if not graph:
+        return content
+
+    fix_vacancy_breadcrumbs(graph)
+    if is_english_page(html_path, content):
+        localize_english_json_ld(graph)
+
+    rel = html_path.relative_to(ROOT).as_posix()
+    job = job_postings.get(rel)
+    if job:
+        page_url = page_base_url(html_path).rstrip("/") + "/"
+        description = extract_meta_content(content, name="description")
+        graph[:] = [node for node in graph if node.get("@type") != "JobPosting"]
+        job_posting = build_job_posting(page_url, job, description)
+        graph.append(job_posting)
+        for node in graph:
+            if node.get("@type") == "WebPage":
+                node["mainEntity"] = {"@id": job_posting["@id"]}
+
+    updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return content[: match.start(2)] + updated_json + content[match.end(2) :]
+
+
 def enhance_contact_organization(content: str, html_path: Path) -> str:
     contact_paths = {"nl/contact/index.html", "en/contact/index.html"}
     rel = html_path.relative_to(ROOT).as_posix()
@@ -372,7 +520,12 @@ def enhance_contact_organization(content: str, html_path: Path) -> str:
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
-def optimize_html(content: str, html_path: Path, descriptions: dict[str, str]) -> str:
+def optimize_html(
+    content: str,
+    html_path: Path,
+    descriptions: dict[str, str],
+    job_postings: dict[str, dict[str, str]],
+) -> str:
     base = page_base_url(html_path)
     content = LEGACY_META_BLOCK.sub(ESSENTIAL_META, content)
     content = fix_seo_urls(content, base)
@@ -385,16 +538,18 @@ def optimize_html(content: str, html_path: Path, descriptions: dict[str, str]) -
     description = extract_meta_content(content, name="description")
     content = update_json_ld_metadata(content, title, description)
 
+    content = enhance_json_ld(content, html_path, job_postings)
     content = enhance_contact_organization(content, html_path)
     return content
 
 
 def main() -> None:
     descriptions = load_descriptions()
+    job_postings = load_job_postings()
     changed = 0
     for path in sorted(ROOT.rglob("*.html")):
         original = path.read_text(encoding="utf-8")
-        updated = optimize_html(original, path, descriptions)
+        updated = optimize_html(original, path, descriptions, job_postings)
         if updated != original:
             path.write_text(updated, encoding="utf-8")
             changed += 1
