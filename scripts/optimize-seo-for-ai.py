@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import re
 from pathlib import Path
@@ -10,6 +11,7 @@ from urllib.parse import urljoin
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = "https://storycatchers.be"
+DESCRIPTIONS_PATH = Path(__file__).with_name("seo-descriptions.json")
 
 LEGACY_META_BLOCK = re.compile(
     r"<!-- GENERAL META -->[\s\S]*?"
@@ -38,6 +40,220 @@ CONTACT_ORG_FIELDS = {
     "telephone": "+3233699446",
     "email": "hallo@storycatchers.be",
 }
+
+TITLE_SUFFIX = " | Storycatchers"
+
+TITLE_OVERRIDES: dict[str, str] = {
+    "index.html": "Digitale studioproducties voor ambitieuze organisaties",
+}
+
+
+def load_descriptions() -> dict[str, str]:
+    if not DESCRIPTIONS_PATH.exists():
+        return {}
+    return json.loads(DESCRIPTIONS_PATH.read_text(encoding="utf-8"))
+
+
+def extract_meta_content(content: str, *, name: str | None = None, prop: str | None = None) -> str | None:
+    if name:
+        match = re.search(
+            rf'<meta name="{re.escape(name)}" content="([^"]*)"',
+            content,
+        )
+    elif prop:
+        match = re.search(
+            rf'<meta property="{re.escape(prop)}" content="([^"]*)"',
+            content,
+        )
+    else:
+        return None
+    return html.unescape(match.group(1)).strip() if match else None
+
+
+def extract_title_tag(content: str) -> str | None:
+    match = re.search(r"<title>\s*(.*?)\s*</title>", content, re.DOTALL)
+    if not match:
+        return None
+    return re.sub(r"\s+", " ", match.group(1)).strip()
+
+
+def normalize_page_title(raw: str) -> str:
+    cleaned = re.sub(r"\s+", " ", raw).strip()
+    for prefix in ("Storycatchers - ", "Storycatchers – "):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix) :].strip()
+    for suffix in (" - Storycatchers", " – Storycatchers", TITLE_SUFFIX):
+        if cleaned.endswith(suffix):
+            cleaned = cleaned[: -len(suffix)].strip()
+    if not cleaned or cleaned == "Storycatchers":
+        return ""
+    return cleaned
+
+
+def resolve_title(content: str, html_path: Path) -> str:
+    rel = html_path.relative_to(ROOT).as_posix()
+    if rel in TITLE_OVERRIDES:
+        return f"{TITLE_OVERRIDES[rel]}{TITLE_SUFFIX}"
+
+    for source in (
+        extract_meta_content(content, prop="og:title"),
+        extract_title_tag(content),
+    ):
+        if not source:
+            continue
+        page_title = normalize_page_title(source)
+        if page_title:
+            return f"{page_title}{TITLE_SUFFIX}"
+
+    fallback = extract_title_tag(content) or "Storycatchers"
+    page_title = normalize_page_title(fallback)
+    return f"{page_title}{TITLE_SUFFIX}" if page_title else fallback
+
+
+def set_title_tag(content: str, title: str) -> str:
+    return re.sub(
+        r"<title>\s*.*?\s*</title>",
+        f"    <title>{html.escape(title)}</title>",
+        content,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+
+def set_meta_content(
+    content: str,
+    value: str,
+    *,
+    name: str | None = None,
+    prop: str | None = None,
+) -> str:
+    escaped = html.escape(value, quote=True)
+    if name:
+        pattern = rf'(<meta name="{re.escape(name)}" content=")[^"]*(")'
+    elif prop:
+        pattern = rf'(<meta property="{re.escape(prop)}" content=")[^"]*(")'
+    else:
+        return content
+
+    if re.search(pattern, content):
+        return re.sub(pattern, rf"\1{escaped}\2", content, count=1)
+
+    if name == "description":
+        insertion = f'\t<meta name="description" content="{escaped}" />\n'
+        canonical = re.search(r"(\t<link rel=\"canonical\")", content)
+        if canonical:
+            return content[: canonical.start()] + insertion + content[canonical.start() :]
+        robots = re.search(r"(<meta name='robots'[^>]*/>\n)", content)
+        if robots:
+            return content[: robots.end()] + insertion + content[robots.end() :]
+    elif prop == "og:description":
+        insertion = f'\t<meta property="og:description" content="{escaped}" />\n'
+        og_title = re.search(r'(<meta property="og:title"[^>]*/>\n)', content)
+        if og_title:
+            return content[: og_title.end()] + insertion + content[og_title.end() :]
+    elif name == "twitter:description":
+        insertion = f'\t<meta name="twitter:description" content="{escaped}" />\n'
+        twitter_title = re.search(r'(<meta name="twitter:title"[^>]*/>\n)', content)
+        if twitter_title:
+            return content[: twitter_title.end()] + insertion + content[twitter_title.end() :]
+        twitter_card = re.search(r'(<meta name="twitter:card"[^>]*/>\n)', content)
+        if twitter_card:
+            return content[: twitter_card.end()] + insertion + content[twitter_card.end() :]
+
+    return content
+
+
+def sync_twitter_from_og(content: str) -> str:
+    og_title = extract_meta_content(content, prop="og:title")
+    og_description = extract_meta_content(content, prop="og:description")
+    og_image = extract_meta_content(content, prop="og:image")
+
+    if og_title:
+        content = set_meta_content(content, og_title, name="twitter:title")
+        if 'name="twitter:title"' not in content:
+            content = re.sub(
+                r'(<meta property="og:title" content="[^"]*" />)',
+                rf'\1\n\t<meta name="twitter:title" content="{html.escape(og_title, quote=True)}" />',
+                content,
+                count=1,
+            )
+
+    meta_description = extract_meta_content(content, name="description")
+    twitter_description = meta_description or og_description
+    if twitter_description:
+        content = set_meta_content(content, twitter_description, name="twitter:description")
+        if 'name="twitter:description"' not in content:
+            source = meta_description or og_description
+            if source:
+                content = re.sub(
+                    r'(<meta property="og:description" content="[^"]*" />)',
+                    rf'\1\n\t<meta name="twitter:description" content="{html.escape(source, quote=True)}" />',
+                    content,
+                    count=1,
+                )
+
+    if og_image and 'name="twitter:image"' not in content:
+        content = re.sub(
+            r'(<meta name="twitter:card"[^>]*/>)',
+            rf'\1\n\t<meta name="twitter:image" content="{html.escape(og_image, quote=True)}" />',
+            content,
+            count=1,
+        )
+
+    return content
+
+
+def normalize_titles(content: str, html_path: Path) -> str:
+    title = resolve_title(content, html_path)
+    content = set_title_tag(content, title)
+    content = set_meta_content(content, title, prop="og:title")
+    content = set_meta_content(content, title, name="twitter:title")
+    if 'property="og:title"' not in content:
+        canonical = re.search(r'(<link rel="canonical"[^>]*/>\n)', content)
+        if canonical:
+            tag = f'\t<meta property="og:title" content="{html.escape(title, quote=True)}" />\n'
+            content = content[: canonical.end()] + tag + content[canonical.end() :]
+    if 'name="twitter:title"' not in content and 'property="og:title"' in content:
+        content = sync_twitter_from_og(content)
+    return content
+
+
+def apply_description(content: str, html_path: Path, descriptions: dict[str, str]) -> str:
+    rel = html_path.relative_to(ROOT).as_posix()
+    description = descriptions.get(rel)
+    if not description:
+        return content
+
+    if not extract_meta_content(content, name="description"):
+        content = set_meta_content(content, description, name="description")
+
+    content = set_meta_content(content, description, prop="og:description")
+    content = set_meta_content(content, description, name="twitter:description")
+    return content
+
+
+def update_json_ld_metadata(content: str, title: str, description: str | None) -> str:
+    match = re.search(
+        r'(<script type="application/ld\+json">)(.*?)(</script>)',
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+
+    try:
+        data = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return content
+
+    for node in data.get("@graph", []):
+        if node.get("@type") == "WebPage":
+            node["name"] = title
+            if description:
+                node["description"] = description
+
+    updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
 def page_base_url(html_path: Path) -> str:
@@ -126,17 +342,6 @@ def fix_json_ld_urls(content: str) -> str:
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
-def add_twitter_title(content: str) -> str:
-    if 'name="twitter:title"' in content:
-        return content
-    return re.sub(
-        r'(<meta property="og:title" content="([^"]*)" />)',
-        r'\1\n\t<meta name="twitter:title" content="\2" />',
-        content,
-        count=1,
-    )
-
-
 def enhance_contact_organization(content: str, html_path: Path) -> str:
     contact_paths = {"nl/contact/index.html", "en/contact/index.html"}
     rel = html_path.relative_to(ROOT).as_posix()
@@ -167,21 +372,29 @@ def enhance_contact_organization(content: str, html_path: Path) -> str:
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
-def optimize_html(content: str, html_path: Path) -> str:
+def optimize_html(content: str, html_path: Path, descriptions: dict[str, str]) -> str:
     base = page_base_url(html_path)
     content = LEGACY_META_BLOCK.sub(ESSENTIAL_META, content)
     content = fix_seo_urls(content, base)
     content = fix_json_ld_urls(content)
-    content = add_twitter_title(content)
+    content = normalize_titles(content, html_path)
+    content = apply_description(content, html_path, descriptions)
+    content = sync_twitter_from_og(content)
+
+    title = resolve_title(content, html_path)
+    description = extract_meta_content(content, name="description")
+    content = update_json_ld_metadata(content, title, description)
+
     content = enhance_contact_organization(content, html_path)
     return content
 
 
 def main() -> None:
+    descriptions = load_descriptions()
     changed = 0
     for path in sorted(ROOT.rglob("*.html")):
         original = path.read_text(encoding="utf-8")
-        updated = optimize_html(original, path)
+        updated = optimize_html(original, path, descriptions)
         if updated != original:
             path.write_text(updated, encoding="utf-8")
             changed += 1
