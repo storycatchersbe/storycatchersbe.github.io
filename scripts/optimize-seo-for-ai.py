@@ -488,12 +488,11 @@ def enhance_json_ld(
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
-def enhance_contact_organization(content: str, html_path: Path) -> str:
-    contact_paths = {"nl/contact/index.html", "en/contact/index.html"}
-    rel = html_path.relative_to(ROOT).as_posix()
-    if rel not in contact_paths:
-        return content
-
+def enhance_organization(content: str, html_path: Path) -> str:
+    """Add address/contact fields and a LocalBusiness type to the Organization
+    node on every page (not just /contact/), so AI crawlers landing on any
+    page can answer "where is this company / how do I reach them" questions.
+    """
     match = re.search(
         r'(<script type="application/ld\+json">)(.*?)(</script>)',
         content,
@@ -509,10 +508,16 @@ def enhance_contact_organization(content: str, html_path: Path) -> str:
 
     graph = data.get("@graph", [])
     for node in graph:
-        if node.get("@type") == "Organization":
-            for key, value in CONTACT_ORG_FIELDS.items():
-                if key not in node:
-                    node[key] = value
+        node_type = node.get("@type")
+        is_organization = node_type == "Organization" or (
+            isinstance(node_type, list) and "Organization" in node_type
+        )
+        if not is_organization:
+            continue
+        node["@type"] = ["Organization", "LocalBusiness"]
+        for key, value in CONTACT_ORG_FIELDS.items():
+            if key not in node:
+                node[key] = value
 
     updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
@@ -537,7 +542,7 @@ def optimize_html(
     content = update_json_ld_metadata(content, title, description)
 
     content = enhance_json_ld(content, html_path, job_postings)
-    content = enhance_contact_organization(content, html_path)
+    content = enhance_organization(content, html_path)
     return content
 
 
