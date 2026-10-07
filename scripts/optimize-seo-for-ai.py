@@ -156,7 +156,7 @@ def set_meta_content(
         return content
 
     if re.search(pattern, content):
-        return re.sub(pattern, rf"\1{escaped}\2", content, count=1)
+        return re.sub(pattern, lambda m: f"{m.group(1)}{escaped}{m.group(2)}", content, count=1)
 
     if name == "description":
         insertion = f'\t<meta name="description" content="{escaped}" />\n'
