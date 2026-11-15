@@ -595,6 +595,162 @@ def enhance_service(content: str, html_path: Path) -> str:
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
+NL_SERVICE_SLUGS = {
+    "educatieve-videoreeksen", "evenementen", "hybride-conferenties", "interviews",
+    "live-streaming", "presentaties", "studios", "talkshows", "videoreeksen",
+    "virtuele-producties", "webinars",
+}
+EN_SERVICE_SLUGS = {
+    "educational-video-series", "events", "hybrid-conferences", "interviews",
+    "live-streaming", "presentations", "talkshows", "video-series",
+    "virtual-production", "webinar-studios", "webinars",
+}
+
+CASE_PAGE_PATTERN = re.compile(r"^(nl/cases|en/cases)/([^/]+)/index\.html$")
+SOLUTION_PAGE_PATTERN = re.compile(r"^(?:nl/oplossingen|en/solutions)/([^/]+)/index\.html$")
+INLINE_SERVICE_LINK_PATTERN = re.compile(r"(?:nl/aanbod|en/services)/([a-z0-9-]+)/")
+
+
+def enhance_organization_offer_catalog(content: str, html_path: Path) -> str:
+    """List every service page as an OfferCatalog item on the Organization
+    node (site-wide, not just on the service pages themselves), so an AI
+    answer engine can enumerate the full set of services Storycatchers
+    offers from a single JSON-LD node, instead of piecing it together page
+    by page.
+    """
+    match = re.search(
+        r'(<script type="application/ld\+json">)(.*?)(</script>)',
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+
+    try:
+        data = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return content
+
+    graph = data.get("@graph", [])
+
+    def is_org(node: dict) -> bool:
+        node_type = node.get("@type")
+        return node_type == "Organization" or (
+            isinstance(node_type, list) and "Organization" in node_type
+        )
+
+    organization = next((node for node in graph if is_org(node)), None)
+    if not organization:
+        return content
+
+    is_en = is_english_page(html_path, content)
+    prefix = "en/services" if is_en else "nl/aanbod"
+    slugs = sorted(EN_SERVICE_SLUGS if is_en else NL_SERVICE_SLUGS)
+    organization["hasOfferCatalog"] = {
+        "@type": "OfferCatalog",
+        "name": "Services" if is_en else "Diensten",
+        "itemListElement": [
+            {
+                "@type": "Offer",
+                "itemOffered": {"@id": f"{SITE}/{prefix}/{slug}/#service"},
+            }
+            for slug in slugs
+        ],
+    }
+
+    updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return content[: match.start(2)] + updated_json + content[match.end(2) :]
+
+def enhance_case_mentions(content: str, html_path: Path) -> str:
+    """Link a case-study WebPage to the specific service(s) it showcases, when
+    the case's own body text already links to that service page. Only acts on
+    an explicit, existing in-content link -- never guesses a service from the
+    case's title or client name.
+    """
+    rel = html_path.relative_to(ROOT).as_posix()
+    if not CASE_PAGE_PATTERN.match(rel):
+        return content
+    if rel.endswith("cases/index.html") or "/cases-overview/" in rel:
+        return content
+
+    body = content.split('<footer class="footer">', 1)[0]
+    is_en = is_english_page(html_path, content)
+    valid_slugs = EN_SERVICE_SLUGS if is_en else NL_SERVICE_SLUGS
+    prefix = "en/services" if is_en else "nl/aanbod"
+
+    seen: list[str] = []
+    for slug in INLINE_SERVICE_LINK_PATTERN.findall(body):
+        if slug in valid_slugs and slug not in seen:
+            seen.append(slug)
+    if not seen:
+        return content
+
+    match = re.search(
+        r'(<script type="application/ld\+json">)(.*?)(</script>)',
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+    try:
+        data = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return content
+
+    graph = data.get("@graph", [])
+    webpage = next((node for node in graph if node.get("@type") == "WebPage"), None)
+    if not webpage:
+        return content
+
+    webpage["mentions"] = [
+        {"@id": f"{SITE}/{prefix}/{slug}/#service"} for slug in seen
+    ]
+
+    updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return content[: match.start(2)] + updated_json + content[match.end(2) :]
+
+
+def enhance_solution_audience(content: str, html_path: Path) -> str:
+    """Tag each audience-segmented solutions page (nl/oplossingen/*,
+    en/solutions/*) with an Audience node derived from its own title, so an
+    AI answer engine can match "solutions for X" queries directly.
+    """
+    rel = html_path.relative_to(ROOT).as_posix()
+    if not SOLUTION_PAGE_PATTERN.match(rel):
+        return content
+
+    match = re.search(
+        r'(<script type="application/ld\+json">)(.*?)(</script>)',
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+    try:
+        data = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return content
+
+    graph = data.get("@graph", [])
+    webpage = next((node for node in graph if node.get("@type") == "WebPage"), None)
+    if not webpage or "audience" in webpage:
+        return content
+
+    name = webpage.get("name", "")
+    if name.endswith(TITLE_SUFFIX):
+        name = name[: -len(TITLE_SUFFIX)]
+    audience_match = re.match(r"^(?:Oplossingen voor|Solutions for)\s+(.+)$", name, re.IGNORECASE)
+    if not audience_match:
+        return content
+    audience_type = audience_match.group(1).strip()
+    audience_type = audience_type[:1].upper() + audience_type[1:]
+
+    webpage["audience"] = {"@type": "Audience", "audienceType": audience_type}
+
+    updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return content[: match.start(2)] + updated_json + content[match.end(2) :]
+
+
 def optimize_html(
     content: str,
     html_path: Path,
@@ -616,6 +772,9 @@ def optimize_html(
     content = enhance_json_ld(content, html_path, job_postings)
     content = enhance_organization(content, html_path)
     content = enhance_service(content, html_path)
+    content = enhance_organization_offer_catalog(content, html_path)
+    content = enhance_case_mentions(content, html_path)
+    content = enhance_solution_audience(content, html_path)
     return content
 
 

@@ -1,3 +1,60 @@
+# Explicit allow for AI/answer-engine crawlers, as a future-proofing signal
+# so a later, more restrictive wildcard rule doesn't accidentally block them.
+# (Each crawler gets its own block because a named User-agent group fully
+# replaces the wildcard group for that crawler, per the robots.txt spec --
+# so the Disallow below is repeated in every block, not just the wildcard.)
+User-agent: GPTBot
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: Claude-User
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: CCBot
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /nl/productie/
+
+User-agent: Bytespider
+Allow: /
+Disallow: /nl/productie/
+
 User-agent: *
 Allow: /
 

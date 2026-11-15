@@ -14,10 +14,45 @@
 - [Cases EN](https://storycatchers.be/en/cases-overview/): Reference projects and client stories
 - [Oplossingen NL](https://storycatchers.be/nl/oplossingen/): Oplossingen per doelgroep (bestuurders, marketeers, HR, events)
 - [Solutions EN](https://storycatchers.be/en/solutions/): Solutions by audience (executives, marketers, HR, events)
-- [Webinar studio's NL](https://storycatchers.be/nl/aanbod/studios/): Professionele webinar- en opnamestudio's in Antwerpen
-- [Webinar studios EN](https://storycatchers.be/en/services/webinar-studios/): Professional webinar and recording studios in Antwerp
 - [Contact NL](https://storycatchers.be/nl/contact/): Contactgegevens en offerte-aanvraag
 - [Contact EN](https://storycatchers.be/en/contact/): Contact details and quote request
+
+## Diensten NL / Services NL
+
+- [Educatieve videoreeksen](https://storycatchers.be/nl/aanbod/educatieve-videoreeksen/): Nieuwe medewerkers onboarden, klanten trainen, maximaal leerresultaat — educatieve videoreeksen helpen opleidingsverantwoordelijken verder.
+- [Evenementen](https://storycatchers.be/nl/aanbod/evenementen/): Van registratie tot live streaming — de technische ruggengraat voor professionele evenementen, congressen en hybride conferenties.
+- [Hybride conferenties](https://storycatchers.be/nl/aanbod/hybride-conferenties/): Verbind fysieke en online deelnemers naadloos in hybride conferenties.
+- [Interviews](https://storycatchers.be/nl/aanbod/interviews/): Professionele studio-interviews met top productiekwaliteit.
+- [Live streaming](https://storycatchers.be/nl/aanbod/live-streaming/): Vlekkeloze live streams voor events, town halls en conferenties.
+- [Presentaties](https://storycatchers.be/nl/aanbod/presentaties/): Presentaties op professioneel studioniveau — scherm, virtueel decor of digitale achtergrond.
+- [Webinar studio's in Antwerpen](https://storycatchers.be/nl/aanbod/studios/): Professionele, volledig uitgeruste webinar- en opnamestudio's.
+- [Talkshows](https://storycatchers.be/nl/aanbod/talkshows/): Studioformats voor talkshows, townhalls en panelgesprekken.
+- [Videoreeksen](https://storycatchers.be/nl/aanbod/videoreeksen/): Herkenbare videoreeksen die communicatie-impact vergroten.
+- [Virtuele producties](https://storycatchers.be/nl/aanbod/virtuele-producties/): Professionele video's met virtuele decors, zonder de studio te verlaten.
+- [Webinars](https://storycatchers.be/nl/aanbod/webinars/): Professionele webinars van strategie en script tot studioproductie.
+
+## Services EN
+
+- [Educational video series](https://storycatchers.be/en/services/educational-video-series/): Onboarding, product training, maximum learning impact.
+- [Events](https://storycatchers.be/en/services/events/): Technical backbone for professional events, congresses and hybrid conferences.
+- [Hybrid conferences](https://storycatchers.be/en/services/hybrid-conferences/): Connect onsite and online audiences seamlessly.
+- [Interviews](https://storycatchers.be/en/services/interviews/): Professional studio interviews with top production quality.
+- [Live streaming](https://storycatchers.be/en/services/live-streaming/): Flawless live streams for events, town halls and conferences.
+- [Presentations](https://storycatchers.be/en/services/presentations/): Elevate presentations to professional studio quality.
+- [Webinar studios](https://storycatchers.be/en/services/webinar-studios/): Professional webinar studios with optimal lighting, sound and guidance.
+- [Talkshows](https://storycatchers.be/en/services/talkshows/): Studio talkshow formats for town halls and expert panels.
+- [Video series](https://storycatchers.be/en/services/video-series/): Recognizable video series that multiply communication impact.
+- [Virtual production](https://storycatchers.be/en/services/virtual-production/): Virtual sets, real impact — professional video without leaving the studio.
+- [Webinars](https://storycatchers.be/en/services/webinars/): Professional webinars from strategy and scripting to live guidance.
+
+## Oplossingen per doelgroep NL / Solutions by audience EN
+
+- [AV-bedrijven](https://storycatchers.be/nl/oplossingen/av-bedrijven/) · [AV companies](https://storycatchers.be/en/solutions/av-companies/)
+- [Bestuurders](https://storycatchers.be/nl/oplossingen/bestuurders/) · [Executives](https://storycatchers.be/en/solutions/executives/)
+- [Communicatieprofessionals](https://storycatchers.be/nl/oplossingen/communicatieprofessionals/) · [Communication professionals](https://storycatchers.be/en/solutions/communication-professionals/)
+- [Eventorganisatoren](https://storycatchers.be/nl/oplossingen/eventorganisatoren/) · [Event organizers](https://storycatchers.be/en/solutions/event-organisers/)
+- [Marketeers](https://storycatchers.be/nl/oplossingen/marketeers/) · [Marketers](https://storycatchers.be/en/solutions/marketers/)
+- [Opleidingsverantwoordelijken](https://storycatchers.be/nl/oplossingen/opleidingsverantwoordelijken/) · [Training managers](https://storycatchers.be/en/solutions/training-managers/)
 
 ## Over het bedrijf / About
 
