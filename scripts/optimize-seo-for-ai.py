@@ -523,6 +523,78 @@ def enhance_organization(content: str, html_path: Path) -> str:
     return content[: match.start(2)] + updated_json + content[match.end(2) :]
 
 
+SERVICE_PAGE_PATTERN = re.compile(r"^(?:nl/aanbod|en/services)/([^/]+)/index\.html$")
+
+
+def enhance_service(content: str, html_path: Path) -> str:
+    """Add a Service node to each individual service/offering page (nl/aanbod/*,
+    en/services/*), linked to the Organization as provider, so AI answer
+    engines can identify "what services does this company offer" directly
+    from structured data instead of inferring it from marketing copy.
+    """
+    rel = html_path.relative_to(ROOT).as_posix()
+    if not SERVICE_PAGE_PATTERN.match(rel):
+        return content
+
+    match = re.search(
+        r'(<script type="application/ld\+json">)(.*?)(</script>)',
+        content,
+        re.DOTALL,
+    )
+    if not match:
+        return content
+
+    try:
+        data = json.loads(match.group(2))
+    except json.JSONDecodeError:
+        return content
+
+    graph = data.get("@graph", [])
+    if not graph or any(node.get("@type") == "Service" for node in graph):
+        return content
+
+    webpage = next((node for node in graph if node.get("@type") == "WebPage"), None)
+
+    def is_org(node: dict) -> bool:
+        node_type = node.get("@type")
+        return node_type == "Organization" or (
+            isinstance(node_type, list) and "Organization" in node_type
+        )
+
+    organization = next((node for node in graph if is_org(node)), None)
+    if not webpage or not organization or not organization.get("@id"):
+        return content
+
+    page_url = webpage.get("@id") or webpage.get("url")
+    name = webpage.get("name") or ""
+    if name.endswith(TITLE_SUFFIX):
+        name = name[: -len(TITLE_SUFFIX)]
+    if not page_url or not name:
+        return content
+
+    is_en = is_english_page(html_path, content)
+    service: dict = {
+        "@type": "Service",
+        "@id": f"{page_url}#service",
+        "name": name,
+        "serviceType": name,
+        "provider": {"@id": organization["@id"]},
+        "areaServed": {"@type": "Country", "name": "Belgium" if is_en else "Belgi\u00eb"},
+        "url": page_url,
+    }
+    description = webpage.get("description")
+    if description:
+        service["description"] = description
+    if webpage.get("image"):
+        service["image"] = webpage["image"]
+
+    webpage["about"] = {"@id": service["@id"]}
+    graph.append(service)
+
+    updated_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return content[: match.start(2)] + updated_json + content[match.end(2) :]
+
+
 def optimize_html(
     content: str,
     html_path: Path,
@@ -543,6 +615,7 @@ def optimize_html(
 
     content = enhance_json_ld(content, html_path, job_postings)
     content = enhance_organization(content, html_path)
+    content = enhance_service(content, html_path)
     return content
 
 
